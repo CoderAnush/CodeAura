@@ -1,0 +1,213 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # Backend Tests
+  backend-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: codeaura_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov
+
+    - name: Run backend tests
+      env:
+        DATABASE_URL: postgresql://postgres:test_password@localhost:5432/codeaura_test
+        REDIS_URL: redis://localhost:6379/0
+      run: |
+        pytest backend/tests/ -v --cov=backend --cov-report=xml
+
+    - name: Upload coverage
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./coverage.xml
+        flags: backend
+
+  # Frontend Tests
+  frontend-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend-react/package-lock.json
+
+    - name: Install dependencies
+      working-directory: frontend-react
+      run: npm ci
+
+    - name: Run linter
+      working-directory: frontend-react
+      run: npm run lint || true
+
+    - name: Build frontend
+      working-directory: frontend-react
+      run: npm run build
+
+  # Build Docker Images
+  build-docker:
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Build backend image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        file: ./Dockerfile
+        tags: ${{ secrets.DOCKER_USERNAME }}/codeaura-backend:latest
+        push: false
+        outputs: type=docker,dest=/tmp/backend-image.tar
+
+    - name: Upload backend image
+      uses: actions/upload-artifact@v3
+      with:
+        name: backend-image
+        path: /tmp/backend-image.tar
+
+  # Security Scanning
+  security-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy results
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # Code Quality
+  code-quality:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        pip install flake8 black isort
+
+    - name: Run code quality checks
+      run: |
+        flake8 backend/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        black --check backend/ || true
+        isort --check-only backend/ || true
+
+  # Deploy to AWS (Manual approval)
+  deploy-aws:
+    runs-on: ubuntu-latest
+    needs: [build-docker, security-scan]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    environment:
+      name: production
+      url: https://codeaura.example.com
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Deploy to EC2
+      env:
+        EC2_HOST: ${{ secrets.EC2_HOST }}
+        EC2_USER: ${{ secrets.EC2_USER }}
+        EC2_KEY: ${{ secrets.EC2_PRIVATE_KEY }}
+      run: |
+        mkdir -p ~/.ssh
+        echo "$EC2_KEY" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H $EC2_HOST >> ~/.ssh/known_hosts
+
+        ssh $EC2_USER@$EC2_HOST << 'EOF'
+          cd /app/codeaura
+          git pull origin main
+          docker-compose pull
+          docker-compose up -d
+        EOF
+
+    - name: Health check
+      run: |
+        sleep 10
+        curl -f https://codeaura.example.com/health || exit 1
+
+    - name: Notify Slack
+      uses: slackapi/slack-github-action@v1
+      with:
+        webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+        payload: |
+          {
+            "text": "✅ CodeAura deployed to production",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*CodeAura Deployment*\n✅ Successfully deployed to AWS EC2\n<https://github.com/${{ github.repository }}/commit/${{ github.sha }}|View Commit>"
+                }
+              }
+            ]
+          }

@@ -14,7 +14,7 @@ class CodeInput(BaseModel):
     code: str = Field(..., min_length=1, max_length=1024*1024)  # 1MB max
     language: str = Field(default="python", description="Programming language")
     ai_provider: Optional[str] = Field(
-        default="openai", 
+        default="openai",
         description="AI provider to use: openai, ollama, gemini"
     )
     project_id: Optional[int] = None
@@ -29,21 +29,51 @@ class AnalysisResult(BaseModel):
     quality_metrics: Optional[dict] = None
 
 
+# ==================== AUTHENTICATION SCHEMAS ====================
+
 class UserCreate(BaseModel):
+    """User registration schema"""
     email: EmailStr
     username: str = Field(..., min_length=3, max_length=50)
-    password: str = Field(..., min_length=8)
+    password: str = Field(..., min_length=8, description="Minimum 8 characters")
 
 
 class UserLogin(BaseModel):
+    """User login schema"""
+    email: str = Field(..., description="Email or username")
+    password: str = Field(...)
+
+
+class UserResponse(BaseModel):
+    """User response schema (no password)"""
+    id: int
+    email: str
     username: str
-    password: str
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TokenResponse(BaseModel):
+    """Token response with access and refresh tokens"""
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int
 
 
 class Token(BaseModel):
+    """Legacy token schema"""
     access_token: str
     token_type: str = "bearer"
     expires_in: Optional[int] = None
+
+
+class RefreshTokenRequest(BaseModel):
+    """Refresh token request"""
+    refresh_token: str
 
 
 class ProjectCreate(BaseModel):
