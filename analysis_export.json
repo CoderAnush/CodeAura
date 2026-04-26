@@ -1,0 +1,30 @@
+{
+  "export_timestamp": "2026-02-06T04:02:04.285403",
+  "format": "CodeAura Analysis Report",
+  "version": "2.0",
+  "analysis": {
+    "issues": [
+      "Language 'python' not supported"
+    ],
+    "complexity": "Unknown",
+    "improved_code": "\ndef fibonacci(n):\n    if n <= 1:\n        return n\n    else:\n        return fibonacci(n-1) + fibonacci(n-2)\n\nresult = fibonacci(10)\nprint(result)\n",
+    "explanation": "Ollama analysis failed: HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded with url: /api/generate (Caused by NewConnectionError(\"HTTPConnection(host='localhost', port=11434): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it\"))",
+    "ai_provider": "ollama",
+    "quality_metrics": {
+      "language": "python",
+      "lines_of_code": 10,
+      "character_count": 146,
+      "issue_count": 1,
+      "quality_score": 100,
+      "complexity_metrics": {
+        "cyclomatic_complexity": 2,
+        "cognitive_complexity": 2,
+        "nesting_depth": 2,
+        "function_count": 1,
+        "class_count": 0
+      },
+      "maintainability_index": 0,
+      "timestamp": "2026-02-06T04:02:00.180279"
+    }
+  }
+}
