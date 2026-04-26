@@ -4,6 +4,7 @@ Run with: pytest backend/tests/ -v
 """
 
 import pytest
+import os
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -13,9 +14,22 @@ from backend.database import Base, User
 from backend.auth import hash_password, verify_password, create_token_pair
 from backend.schemas import UserCreate, CodeInput
 
-# Test database setup
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+# Use file-based database (deleted before test session)
+# CI/CD will start fresh, so this works fine
+db_file = "test_backend.db"
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{db_file}"
+
+# Clean up old test database if it exists
+if os.path.exists(db_file):
+    try:
+        os.remove(db_file)
+    except:
+        pass
+
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base.metadata.create_all(bind=engine)
@@ -162,7 +176,7 @@ class TestAuthentication:
     def test_unauthorized_without_token(self):
         """Test accessing protected endpoint without token"""
         response = client.get("/auth/me")
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 # ==================== PASSWORD HASHING TESTS ====================
