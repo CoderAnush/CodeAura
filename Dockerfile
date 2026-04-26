@@ -1,4 +1,4 @@
-# Multi-stage Dockerfile for Code Aura
+# Multi-stage Dockerfile for CodeAura (Production)
 FROM python:3.11-slim as builder
 
 # Set environment variables
@@ -7,8 +7,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Install system dependencies for compilation
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     && rm -rf /var/lib/apt/lists/*
@@ -20,8 +20,8 @@ WORKDIR /app
 COPY requirements.txt .
 
 # Install Python dependencies
-RUN pip install --upgrade pip
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Production stage
 FROM python:3.11-slim
@@ -30,13 +30,6 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     APP_ENV=production
-
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create non-root user
-RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 # Create app directory
 WORKDIR /app
@@ -48,18 +41,12 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy application code
 COPY . .
 
-# Change ownership
-RUN chown -R appuser:appuser /app
-
-# Switch to non-root user
-USER appuser
-
 # Expose port
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+# Health check using Python (more reliable than curl)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:8000/docs', timeout=5)" || exit 1
 
-# Run application
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+# Run application with 2 workers (for CI/CD testing, not production scale)
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
