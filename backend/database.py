@@ -34,13 +34,22 @@ from datetime import datetime
 import os
 from backend.config import settings
 
-# Create engine
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_size=settings.DATABASE_POOL_SIZE,
-    max_overflow=settings.DATABASE_MAX_OVERFLOW,
-    echo=settings.DEBUG
-)
+# Create engine with conditional pool settings
+# SQLite doesn't support pool_size and max_overflow, so skip them
+if "sqlite" in settings.DATABASE_URL.lower():
+    engine = create_engine(
+        settings.DATABASE_URL,
+        echo=settings.DEBUG,
+        connect_args={"check_same_thread": False}
+    )
+else:
+    # PostgreSQL and other databases support pooling
+    engine = create_engine(
+        settings.DATABASE_URL,
+        pool_size=settings.DATABASE_POOL_SIZE,
+        max_overflow=settings.DATABASE_MAX_OVERFLOW,
+        echo=settings.DEBUG
+    )
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

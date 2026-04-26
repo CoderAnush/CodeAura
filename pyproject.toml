@@ -101,7 +101,7 @@ code-aura = "code_aura.cli:app"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["code_aura*"]
+include = ["backend*"]
 exclude = ["tests*", "docs*", "examples*"]
 
 [tool.black]
@@ -145,22 +145,21 @@ strict_equality = true
 
 [tool.pytest.ini_options]
 minversion = "7.0"
-addopts = "-ra -q --cov=code_aura --cov-report=html --cov-report=term-missing"
+addopts = "-ra -q"
 testpaths = [
-    "tests",
+    "backend/tests",
 ]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 
 [tool.coverage.run]
-source = ["code_aura"]
+source = ["backend"]
 omit = [
     "*/tests/*",
     "*/migrations/*",
     "*/settings/*",
-    "manage.py",
-    "*/apps.py",
+    "*/conftest.py",
 ]
 
 [tool.coverage.report]
