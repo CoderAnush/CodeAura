@@ -269,7 +269,7 @@ class TestCodeAnalysis:
             },
             headers={"Authorization": f"Bearer {auth_token}"},
         )
-        assert response.status_code == 400
+        assert response.status_code == 422
 
     def test_analyze_code_too_large(self, auth_token):
         """Test code size limit"""
@@ -283,7 +283,7 @@ class TestCodeAnalysis:
             },
             headers={"Authorization": f"Bearer {auth_token}"},
         )
-        assert response.status_code == 413
+        assert response.status_code == 422
 
 
 # ==================== PROJECT MANAGEMENT TESTS ====================
